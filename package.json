@@ -17,6 +17,8 @@
   },
   "homepage": "https://github.com/MilliVolt/streamer#readme",
   "dependencies": {
+    "pg": "^6.1.0",
+    "pg-native": "^1.10.0",
     "through2": "^2.0.1",
     "youtube-api": "^2.0.2",
     "youtube-dl": "^1.11.1"

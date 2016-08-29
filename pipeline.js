@@ -1,6 +1,7 @@
 const ytdl = require("youtube-dl");
 const cp = require('child_process');
 const through = require('through2');
+const util = require('util');
 
 
 const gen_list = (query, limit) => {
@@ -17,8 +18,8 @@ const parse_data = through.obj(function(chunk, enc, cb) {
     res_json.tags = info.tags;
     res_json.description = info.description;
     res_json.categories = info.categories;
+    res_json.duration = info.duration;
     res_json.id = info.display_id;
-    debugger;
     this.push(res_json);
     
 });
@@ -35,20 +36,62 @@ const find_best_va = (info) => {
 };
 
 const download_video = through.obj(function(chunk, enc, cb) {
-    console.log(chunk);
+    console.log('start downloading %s video', chunk.id);
+    chunk.video_file_location = util.format('video_%s', chunk.id);
+	const download = cp.spawn('wget',
+							  ['-O', 
+                               chunk.video_file_location,
+							   chunk.video_url]);
+    download.stdout.resume();
+    download.stderr.resume();
+    download.on('exit', () => this.push(chunk));
+});
+
+const download_audio = through.obj(function(chunk, enc, cb) {
+    console.log('start downloading %s audio', chunk.id);
+	const download = cp.spawn('wget',
+							  ['-O', 
+							   chunk.id + '_audio',
+							   chunk.audio_url]);
+    download.stdout.resume();
+    download.stderr.resume();
     cb();
+    download.on('exit', function() {
+        console.log('closed');
+    });
+});
+
+const extract_video = through.obj(function(chunk, enc, cb) {
+    console.log('starting extract video at %s', chunk.video_file_location);
+    var extraction = cp.spawn('./extract_video.bash', [chunk.video_file_location]);
+    extraction.stdout.resume();
+    extraction.stderr.resume();
+    cb();
+    extraction.on('error', (err) => console.log(err));
+    extraction.on('exit', function(exit_code) {
+        this.push(chunk);
+    });
+});
+
+const extract_audio = through.obj(function(chunk, enc, cb) {
 });
 
 
 const write_to_db = '肏';
 
-var rs = gen_list('bike', 50);
+var rs = gen_list('very short video', 50);
 
 //here's the pipeline
 const pipeline = ()=> {
     rs
         .pipe(parse_data)
-        .pipe(download_video);
+        .pipe(download_video)
+        .pipe(extract_video)
+        ;
+        //.pipe(download_audio)
+        //.pipe(matching)
+        //.pipe(delete_video)
+        //.pipe(write_to_db)
 };
 
 pipeline();
