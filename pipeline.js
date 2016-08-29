@@ -2,6 +2,7 @@ const ytdl = require("youtube-dl");
 const cp = require('child_process');
 const through = require('through2');
 const util = require('util');
+const settings = require('./settings');
 
 
 const gen_list = (query, limit) => {
@@ -23,8 +24,12 @@ const parse_data = through.obj(function(chunk, enc, cb) {
     this.push(res_json);
     
 });
-
 const find_best_va = (info) => {
+    // in this function we try to find best video and audio from info.formats,
+    // now that I come to think about it, ffprobe would tke a long time to 
+    // parse a big file instead of a small file, it might make sense to download
+    // the smallest possible video 
+    // TODO: possibly do smaller video
     const re = /^([0-9][0-9][0-9]).*\+([0-9][0-9][0-9]).*/g;
     const regex_res = re.exec(info.format);
     const vid = regex_res[1];
@@ -37,11 +42,14 @@ const find_best_va = (info) => {
 
 const download_video = through.obj(function(chunk, enc, cb) {
     console.log('start downloading %s video', chunk.id);
-    chunk.video_file_location = util.format('video_%s', chunk.id);
+    chunk.video_file_location = util.format('%s/video_%s',
+                                            settings.BUFFER_DIR,
+                                            chunk.id);
 	const download = cp.spawn('wget',
 							  ['-O', 
                                chunk.video_file_location,
 							   chunk.video_url]);
+    cb();
     download.stdout.resume();
     download.stderr.resume();
     download.on('exit', () => this.push(chunk));
@@ -64,13 +72,11 @@ const download_audio = through.obj(function(chunk, enc, cb) {
 const extract_video = through.obj(function(chunk, enc, cb) {
     console.log('starting extract video at %s', chunk.video_file_location);
     var extraction = cp.spawn('./extract_video.bash', [chunk.video_file_location]);
+    cb();
     extraction.stdout.resume();
     extraction.stderr.resume();
-    cb();
     extraction.on('error', (err) => console.log(err));
-    extraction.on('exit', function(exit_code) {
-        this.push(chunk);
-    });
+    extraction.on('exit', (exit_code) => this.push(JSON.stringify(chunk)));
 });
 
 const extract_audio = through.obj(function(chunk, enc, cb) {
@@ -79,7 +85,7 @@ const extract_audio = through.obj(function(chunk, enc, cb) {
 
 const write_to_db = '肏';
 
-var rs = gen_list('very short video', 50);
+var rs = gen_list('very short', 50);
 
 //here's the pipeline
 const pipeline = ()=> {
@@ -87,6 +93,7 @@ const pipeline = ()=> {
         .pipe(parse_data)
         .pipe(download_video)
         .pipe(extract_video)
+        .pipe(process.stdout)
         ;
         //.pipe(download_audio)
         //.pipe(matching)
