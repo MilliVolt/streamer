@@ -9,6 +9,7 @@ const gen_list = (query, limit) => {
     const search = cp.spawn("youtube-dl", 
                             ["ytsearch" + limit + ":" + query,
                              "-j"]);
+    search.stdout._readableState.highWaterMark = 3;
     return search.stdout;
 };
 
@@ -76,7 +77,7 @@ const extract_video = through.obj(function(chunk, enc, cb) {
     extraction.stdout.resume();
     extraction.stderr.resume();
     extraction.on('error', (err) => console.log(err));
-    extraction.on('exit', (exit_code) => this.push(JSON.stringify(chunk)));
+    //extraction.on('exit', (exit_code) => this.push(JSON.stringify(chunk)));
 });
 
 const extract_audio = through.obj(function(chunk, enc, cb) {
@@ -93,7 +94,6 @@ const pipeline = ()=> {
         .pipe(parse_data)
         .pipe(download_video)
         .pipe(extract_video)
-        .pipe(process.stdout)
         ;
         //.pipe(download_audio)
         //.pipe(matching)
