@@ -1,0 +1,11 @@
+after reading much about job queues I come to the conclusion that the naive stream approach is just too error prone. A job queue can deliver the orchestration of jobs with retries and also it can send jobs to other machines should you have them so that it can actually scale. Scaling a process probably means to manage it well with a well-meaning queue. 
+
+in order to have the service under control, I am encisioning a few parts:
+
+1. the crawl: youtube-dl will give out a search result, we can use them to reiterate on the next batch, every search result will lead to the creation of a queue. if the tag is already in the queue then the queue addition should be skipped. If there are too many in the queue (say 100?) the queue will be stopped and use the last one result to continue on its own. 
+
+2. the downloader: wget or curl under vpn or tor will download the videos and save them in a folder
+
+3. the extractor: ffprobe and aubio will do the extraction, it will live in a bash script so that it will delete them afterwards. this is the longest process and it takes a lot of cpu power to do. the result the extractor will be read into a db.
+
+4. the matcher: this can be a separate process to find unmatched songs and do matching between.
