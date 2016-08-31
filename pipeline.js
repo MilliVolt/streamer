@@ -1,4 +1,3 @@
-const ytdl = require("youtube-dl");
 const cp = require('child_process');
 const through = require('through2');
 const util = require('util');
