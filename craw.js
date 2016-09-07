@@ -11,7 +11,7 @@ const jobs = require('level-jobs');
 const db = level('jobs/craw');
 
 const options = {
-  maxConcurrency: 2,
+  maxConcurrency: 1,
   maxRetries:     2,
   backoff: {
     randomisationFactor: 0,
@@ -20,41 +20,38 @@ const options = {
   }
 };
 
-//const video_queue = require('./video_queue').queue;
+const video_queue = require('./video_queue').queue;
 
 const worker = function(search_item, cb) {
-    console.log("job started crawling term: %s", search_item);
-    pipeline(search_item, 3, function() {
+    //console.log("job started crawling term: %s", search_item);
+    pipeline(search_item, 10, function(err) {
+        if (err) cb(err);
+        console.log('job on %s is drained', search_item);
         cb();
     });
 };
 
 const queue = jobs(db, worker, options);
 
+
 const gen_list = (query, limit) => {
+    /*
     const search = cp.spawn("torsocks",
                             ["-i",
-                             "youtube-dl",
                              "ytsearch" + limit + ":" + query,
+                             "-j"]);
+    const search = cp.spawn("youtube-dl",
+                            ["ytsearch" + limit + ":" + query,
+                             "-j",
+                             "--proxy",
+                             "socks5://127.0.0.1:9050"]);
+     */
+
+    const search = cp.spawn("youtube-dl",
+                            ["ytsearch" + limit + ":" + query,
                              "-j"]);
     return search.stdout;
 };
-
-const parse_data = through.obj(function(chunk, enc, cb) {
-    const info = JSON.parse(chunk.toString());
-    let res_json = find_best_va(info); 
-    res_json.tags = info.tags;
-    res_json.categories = info.categories;
-    res_json.duration = info.duration;
-    res_json.id = info.display_id;
-    console.log(res_json.id);
-    cb();
-    info.tags.map(tag => {
-        queue.push(tag);
-    });
-    this.push('done');
-    
-});
 
 const find_best_va = (info) => {
     // in this function we try to find best video and audio from info.formats,
@@ -72,23 +69,49 @@ const find_best_va = (info) => {
             audio_url: a_url};
 };
 
+const parse_data = function(chunk,cb) {
+    try {
+        let info = JSON.parse(chunk.toString());
+        console.log('parsing %s', info.id);
+        let res_json = find_best_va(info); 
+        res_json.tags = info.tags;
+        res_json.categories = info.categories;
+        res_json.duration = info.duration;
+        res_json.id = info.display_id;
+        info.tags.map(tag => {
+            queue.push(tag);
+        });
+        video_queue.push(res_json);
+    } catch(e) {
+        console.log('err');
+        console.log(e);
+        cb(e);
+    }
+};
+
 var pipeline = (tag, lim, cb) => {
-    console.log('now search for the 10 best list of %s', tag);
+    //console.log('now search for the %s best list of %s', lim, tag);
     gen_list(tag, lim)
-        .pipe(parse_data)
         .on('data', function(data) {
+            parse_data(data, cb);
         })
         .on('error', (err) => {
+            //console.log('error');
+            console.log(err);
             cb(err);
         })
-        .on('end', function() {
-            console.log('end');
-            cb();
+        .on('close', function() {
+            console.log('stream on %s ended', tag);
+            cb(null);
         })
         ;
 };
 
 queue.push('fixed gear bike');
+
+queue.on('retry', function(d) {
+    console.log('i am retrying!');
+});
 
 exports.pipeline = pipeline;
 exports.queue = queue;

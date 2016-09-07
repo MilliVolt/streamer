@@ -9,3 +9,14 @@ in order to have the service under control, I am encisioning a few parts:
 3. the extractor: ffprobe and aubio will do the extraction, it will live in a bash script so that it will delete them afterwards. this is the longest process and it takes a lot of cpu power to do. the result the extractor will be read into a db.
 
 4. the matcher: this can be a separate process to find unmatched songs and do matching between.
+
+define queues: 
+
+1. craw queue: crawling tasks will be added to the queue to download: for every tags we craw we will add them in the the craw queue. craw queue should start with one search.
+
+2. process queues:
+    - for each individual id, go to database to check if they exist
+    - if new, download them,
+    - after download, get ffmpeg and aubio score
+    - store them in db
+    - finished
