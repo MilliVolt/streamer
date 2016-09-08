@@ -11,7 +11,7 @@ const jobs = require('level-jobs');
 const db = level('jobs/craw');
 
 const options = {
-  maxConcurrency: 1,
+  maxConcurrency: 10,
   maxRetries:     2,
   backoff: {
     randomisationFactor: 0,

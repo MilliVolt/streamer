@@ -3,6 +3,7 @@ const jobs = require('level-jobs');
 const cp = require('child_process');
 const through = require('through2');
 const settings = require('./settings');
+const Promise = require('bluebird');
 const db = level('jobs/video');
 const constring = settings.constring;
 const pg = require('knex')({
@@ -19,7 +20,7 @@ const fs = require('fs');
 //
 
 const options = {
-  maxConcurrency: 1,
+  maxConcurrency: 3,
   maxRetries:     2,
   backoff: {
     randomisationFactor: 0,
@@ -36,8 +37,8 @@ const write_to_db = function(youtube_obj) {
 };
 
 const process_youtube = (youtube_obj)=> {
-    debugger;
     return new Promise((resolve, reject) => {
+        console.log('in the promise');
         var extraction = cp.spawn('./process_youtube.bash', 
                                   [youtube_obj.video_url,
                                    youtube_obj.audio_url,
@@ -46,7 +47,7 @@ const process_youtube = (youtube_obj)=> {
         extraction.stdout.resume();
         extraction.stderr.resume();
         extraction.on('error', (err) => reject(err));
-        extraction.on('exit', (exit_code) => {
+        extraction.on('exit', function(exit_code) {
             resolve(youtube_obj);
         });
     });
@@ -57,12 +58,20 @@ const worker = function(youtube_obj, cb) {
     console.log('starting processing %s' , youtube_obj.id);
     read_from_db(youtube_obj)
         .then((exist) => {
-            if (exist.length !== 0) cb();
-            debugger;
-            return process_youtube(youtube_obj);
+            if (exist.length !== 0) {
+                console.log('%s exists in the db..skip', youtube_obj.id);
+                cb();
+            } else {
+                return process_youtube(youtube_obj);
+            }
         })
         .then(write_to_db)
-        .then(cb());
+        .then(function(){
+            cb();
+        })
+        .catch(function(err) {
+            Promise.reject(err);
+        });
     };
 
 const queue = jobs(db, worker, options);
