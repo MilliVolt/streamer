@@ -11,6 +11,7 @@ const pg = require('knex')({
     connection: constring
 });
 const fs = require('fs');
+const util = require('util');
 
 //
 // tft=# select * from tft.video;
@@ -36,6 +37,23 @@ const write_to_db = function(youtube_obj) {
     return pg('tft.video').insert(youtube_obj);
 };
 
+const get_video_score = function(id) {
+    const path = util.format('buf/video_%s.tmp.simp', id);
+    debugger;
+    return fs
+            .readFileSync(path)
+            .split('\n')
+            .splice(0, -1);
+};
+
+const get_audio_score = function(id) {
+    const path = util.format('buf/audio_%s.tmp', id);
+    return fs
+            .readFileSync(path)
+            .split('\n')
+            .splice(0, -1);
+};
+
 const process_youtube = (youtube_obj)=> {
     return new Promise((resolve, reject) => {
         console.log('in the promise');
@@ -48,7 +66,19 @@ const process_youtube = (youtube_obj)=> {
         extraction.stderr.resume();
         extraction.on('error', (err) => reject(err));
         extraction.on('exit', function(exit_code) {
-            resolve(youtube_obj);
+//
+// tft=# select * from tft.video;
+// id | url_id | duration | video_shot_times | audio_beat_times | video_metadata 
+// ----+--------+----------+------------------+------------------+----------------
+// (0 rows)
+//
+            let res = {};
+            res.url_id = youtube_obj.id;
+            res.duration = youtube_obj.info.duration;
+            res.video_shot_times = get_video_score(youtube_obj.id);
+            res.audio_beat_times = get_audio_score(youtube_obj.id);
+            res.video_metadata = youtube_obj.info;
+            resolve(res);
         });
     });
 };
