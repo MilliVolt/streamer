@@ -11,6 +11,7 @@ const pg = require('knex')({
     connection: constring
 });
 const fs = require('fs');
+Promise.promisifyAll(fs);
 const util = require('util');
 
 //
@@ -37,21 +38,32 @@ const write_to_db = function(youtube_obj) {
     return pg('tft.video').insert(youtube_obj);
 };
 
-const get_video_score = function(id) {
-    const path = util.format('buf/video_%s.tmp.simp', id);
-    debugger;
-    return fs
-            .readFileSync(path)
-            .split('\n')
-            .splice(0, -1);
+const get_video_score = (youtube_obj)=> {
+    const path = util.format('buf/video_%s.tmp.simp', youtube_obj.url_id);
+    return new Promise((resolve, reject) => {
+        return fs.readFileAsync(path).then((res) =>{
+            var cleaned = res
+                    .toString()
+                    .split('\n')
+                    .slice(0, -1);
+            youtube_obj.video_shot_times = cleaned;
+            resolve(youtube_obj);
+        });
+    });
 };
 
-const get_audio_score = function(id) {
-    const path = util.format('buf/audio_%s.tmp', id);
-    return fs
-            .readFileSync(path)
-            .split('\n')
-            .splice(0, -1);
+const get_audio_score = (youtube_obj)=> {
+    const path = util.format('buf/audio_%s.tmp', youtube_obj.url_id);
+    return new Promise((resolve, reject) => {
+        return fs.readFileAsync(path).then((res) =>{
+            var cleaned = res
+                    .toString()
+                    .split('\n')
+                    .slice(0, -1);
+            youtube_obj.audio_beat_times = cleaned;
+            resolve(youtube_obj);
+        });
+    });
 };
 
 const process_youtube = (youtube_obj)=> {
@@ -75,9 +87,7 @@ const process_youtube = (youtube_obj)=> {
             let res = {};
             res.url_id = youtube_obj.id;
             res.duration = youtube_obj.info.duration;
-            res.video_shot_times = get_video_score(youtube_obj.id);
-            res.audio_beat_times = get_audio_score(youtube_obj.id);
-            res.video_metadata = youtube_obj.info;
+            res.video_metadata = JSON.stringify(youtube_obj.info);
             resolve(res);
         });
     });
@@ -95,6 +105,8 @@ const worker = function(youtube_obj, cb) {
                 return process_youtube(youtube_obj);
             }
         })
+        .then(get_video_score)
+        .then(get_audio_score)
         .then(write_to_db)
         .then(function(){
             cb();
