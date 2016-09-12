@@ -1,4 +1,3 @@
-const ytdl = require("youtube-dl");
 const cp = require('child_process');
 const through = require('through2');
 const util = require('util');
@@ -22,7 +21,7 @@ const parse_data = through.obj(function(chunk, enc, cb) {
     res_json.categories = info.categories;
     res_json.duration = info.duration;
     res_json.id = info.display_id;
-    this.push(res_json);
+    this.push(JSON.stringify(res_json));
     
 });
 const find_best_va = (info) => {
@@ -86,14 +85,14 @@ const extract_audio = through.obj(function(chunk, enc, cb) {
 
 const write_to_db = '肏';
 
-var rs = gen_list('very short', 50);
+var rs = gen_list('fixed gear bicycle', 1);
 
 //here's the pipeline
 const pipeline = ()=> {
     rs
         .pipe(parse_data)
-        .pipe(download_video)
-        .pipe(extract_video)
+        .pipe(process.stdout)
+        //.pipe(extract_video)
         ;
         //.pipe(download_audio)
         //.pipe(matching)
