@@ -14,13 +14,6 @@ const fs = require('fs');
 Promise.promisifyAll(fs);
 const util = require('util');
 
-//
-// tft=# select * from tft.video;
-// id | url_id | duration | video_shot_times | audio_beat_times | video_metadata 
-// ----+--------+----------+------------------+------------------+----------------
-// (0 rows)
-//
-
 const options = {
   maxConcurrency: 3,
   maxRetries:     2,
@@ -78,16 +71,10 @@ const process_youtube = (youtube_obj)=> {
         extraction.stderr.resume();
         extraction.on('error', (err) => reject(err));
         extraction.on('exit', function(exit_code) {
-//
-// tft=# select * from tft.video;
-// id | url_id | duration | video_shot_times | audio_beat_times | video_metadata 
-// ----+--------+----------+------------------+------------------+----------------
-// (0 rows)
-//
             let res = {};
             res.url_id = youtube_obj.id;
             res.duration = youtube_obj.info.duration;
-            res.video_metadata = JSON.stringify(youtube_obj.info);
+            res.video_metadata = JSON.stringify(youtube_obj.info); //json(b)
             resolve(res);
         });
     });
