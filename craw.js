@@ -103,7 +103,7 @@ var pipeline = (tag, lim, cb) => {
         ;
 };
 
-queue.push('fixed gear bike');
+//queue.push('fixed gear bike');
 
 queue.on('retry', function(d) {
     console.log('i am retrying!');

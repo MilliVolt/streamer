@@ -74,6 +74,7 @@ const process_youtube = (youtube_obj)=> {
             let res = {};
             res.url_id = youtube_obj.id;
             res.duration = youtube_obj.info.duration;
+            res.tags = youtube_obj.info.tags || []; // in case if it's undefined
             res.video_metadata = JSON.stringify(youtube_obj.info); //json(b)
             resolve(res);
         });
@@ -87,7 +88,7 @@ const worker = function(youtube_obj, cb) {
         .then((exist) => {
             if (exist.length !== 0) {
                 console.log('%s exists in the db..skip', youtube_obj.id);
-                cb();
+                cb(new Error('existing in db'));
             } else {
                 return process_youtube(youtube_obj);
             }
@@ -96,14 +97,19 @@ const worker = function(youtube_obj, cb) {
         .then(get_audio_score)
         .then(write_to_db)
         .then(function(){
+            console.log('WROTE IN DB ' + youtube_obj.url_id);
             cb();
         })
         .catch(function(err) {
-            Promise.reject(err);
+            cb(err);
+            //Promise.reject(err);
         });
     };
 
 const queue = jobs(db, worker, options);
 
+
+queue.on('error', function(err) {
+});
 
 exports.queue = queue;
