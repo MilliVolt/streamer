@@ -61,21 +61,17 @@ const get_audio_score = (youtube_obj)=> {
 
 const process_youtube = (youtube_obj)=> {
     return new Promise((resolve, reject) => {
-        console.log('in the promise');
         var extraction = cp.spawn('./process_youtube.bash', 
-                                  [youtube_obj.video_url,
-                                   youtube_obj.audio_url,
-                                   youtube_obj.id
-                                  ]);
+                                  [youtube_obj.id]);
         extraction.stdout.resume();
         extraction.stderr.resume();
         extraction.on('error', (err) => reject(err));
         extraction.on('exit', function(exit_code) {
             let res = {};
             res.url_id = youtube_obj.id;
-            res.duration = youtube_obj.info.duration;
-            res.tags = youtube_obj.info.tags || []; // in case if it's undefined
-            res.video_metadata = JSON.stringify(youtube_obj.info); //json(b)
+            res.duration = youtube_obj.duration;
+            res.tags = youtube_obj.tags || []; // in case if it's undefined
+            res.video_metadata = JSON.stringify(youtube_obj); //json(b)
             resolve(res);
         });
     });
@@ -98,9 +94,6 @@ const worker = function(youtube_obj, cb) {
                 const message = util.format('%s exists in the db..skip', 
                                              youtube_obj.id);
                 throw new EarlyExitError(message);
-                
-                //cb(new Error('existing in db'));
-                
             } else {
                 return process_youtube(youtube_obj);
             }
