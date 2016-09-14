@@ -5,10 +5,11 @@ const settings = require('./settings');
 const fs = require('fs');
 const JSONStream = require('JSONStream');
 
-const level = require('level');
-const jobs = require('level-jobs');
+const kue = require('kue');
+const queue = kue.createQueue();
 
 const db = level('jobs/craw');
+
 
 const options = {
   maxConcurrency: 3,
@@ -21,18 +22,6 @@ const options = {
 };
 
 const video_queue = require('./video').queue;
-
-const worker = function(search_item, cb) {
-    //console.log("job started crawling term: %s", search_item);
-    pipeline(search_item, 10, function(err) {
-        console.log(cb);
-        if (err) cb(err);
-        console.log('job on %s is drained', search_item);
-        cb();
-    });
-};
-
-const queue = jobs(db, worker, options);
 
 
 const gen_list = (query, limit) => {
@@ -47,9 +36,9 @@ const parse_data = function(chunk,cb) {
         let info = JSON.parse(chunk.toString());
         console.log('parsing %s', info.id);
         info.tags.map(tag => {
-            queue.push(tag);
+            queue.create('crawl', tag); 
         });
-        video_queue.push(info);
+        queue.create('video', res_json);
     } catch(e) {
         console.log('err');
         console.log(e);
@@ -65,8 +54,8 @@ var pipeline = (tag, lim, cb) => {
         })
         .on('error', (err) => {
             //console.log('error');
-            if (err instanceof SyntaxError ||
-                err instanceof TypeError) {
+            if ((err instanceof SyntaxError) ||
+                (err instanceof TypeError)) {
                 // if it's ill defined json, don't care
                 console.log(err.message);
                 cb();
@@ -83,7 +72,6 @@ var pipeline = (tag, lim, cb) => {
 //queue.push('fixed gear bike');
 
 queue.on('retry', function(d) {
-
     //console.log('i am retrying! ', ...arguments);
 });
 
