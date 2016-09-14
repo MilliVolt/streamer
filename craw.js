@@ -25,6 +25,7 @@ const video_queue = require('./video').queue;
 const worker = function(search_item, cb) {
     //console.log("job started crawling term: %s", search_item);
     pipeline(search_item, 10, function(err) {
+        console.log(cb);
         if (err) cb(err);
         console.log('job on %s is drained', search_item);
         cb();
@@ -93,7 +94,12 @@ var pipeline = (tag, lim, cb) => {
         })
         .on('error', (err) => {
             //console.log('error');
-            console.log(err);
+            if (err instanceof SyntaxError ||
+                err instanceof TypeError) {
+                // if it's ill defined json, don't care
+                console.log(err.message);
+                cb();
+            }
             cb(err);
         })
         .on('close', function() {
@@ -106,7 +112,8 @@ var pipeline = (tag, lim, cb) => {
 //queue.push('fixed gear bike');
 
 queue.on('retry', function(d) {
-    console.log('i am retrying!');
+
+    //console.log('i am retrying! ', ...arguments);
 });
 
 queue.on('error', function(err) {

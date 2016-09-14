@@ -81,14 +81,26 @@ const process_youtube = (youtube_obj)=> {
     });
 };
 
+class EarlyExitError extends Error {
+    constructor(message) {
+        super(message);
+        this.message = message;
+        this.name = 'EarlyExit';
+    }
+}
+
 const worker = function(youtube_obj, cb) {
    // do download and analysis here 
     console.log('starting processing %s' , youtube_obj.id);
     read_from_db(youtube_obj)
         .then((exist) => {
             if (exist.length !== 0) {
-                console.log('%s exists in the db..skip', youtube_obj.id);
-                cb(new Error('existing in db'));
+                const message = util.format('%s exists in the db..skip', 
+                                             youtube_obj.id);
+                throw new EarlyExitError(message);
+                
+                //cb(new Error('existing in db'));
+                
             } else {
                 return process_youtube(youtube_obj);
             }
@@ -101,6 +113,10 @@ const worker = function(youtube_obj, cb) {
             cb();
         })
         .catch(function(err) {
+            if (err instanceof EarlyExitError) {
+                console.log(err.message);
+                cb();
+            }
             cb(err);
             //Promise.reject(err);
         });
@@ -110,6 +126,7 @@ const queue = jobs(db, worker, options);
 
 
 queue.on('error', function(err) {
+    //debugger;
 });
 
 exports.queue = queue;
