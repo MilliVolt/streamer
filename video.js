@@ -61,24 +61,29 @@ const get_audio_score = (youtube_obj)=> {
 
 const process_youtube = (youtube_obj)=> {
     return new Promise((resolve, reject) => {
-        console.log('in the promise');
         var extraction = cp.spawn('./process_youtube.bash', 
-                                  [youtube_obj.video_url,
-                                   youtube_obj.audio_url,
-                                   youtube_obj.id
-                                  ]);
+                                  [youtube_obj.id]);
         extraction.stdout.resume();
         extraction.stderr.resume();
         extraction.on('error', (err) => reject(err));
         extraction.on('exit', function(exit_code) {
             let res = {};
             res.url_id = youtube_obj.id;
-            res.duration = youtube_obj.info.duration;
-            res.video_metadata = JSON.stringify(youtube_obj.info); //json(b)
+            res.duration = youtube_obj.duration;
+            res.tags = youtube_obj.tags || []; // in case if it's undefined
+            res.video_metadata = JSON.stringify(youtube_obj); //json(b)
             resolve(res);
         });
     });
 };
+
+class EarlyExitError extends Error {
+    constructor(message) {
+        super(message);
+        this.message = message;
+        this.name = 'EarlyExit';
+    }
+}
 
 const worker = function(youtube_obj, cb) {
    // do download and analysis here 
@@ -86,8 +91,9 @@ const worker = function(youtube_obj, cb) {
     read_from_db(youtube_obj)
         .then((exist) => {
             if (exist.length !== 0) {
-                console.log('%s exists in the db..skip', youtube_obj.id);
-                cb();
+                const message = util.format('%s exists in the db..skip', 
+                                             youtube_obj.id);
+                throw new EarlyExitError(message);
             } else {
                 return process_youtube(youtube_obj);
             }
@@ -96,14 +102,24 @@ const worker = function(youtube_obj, cb) {
         .then(get_audio_score)
         .then(write_to_db)
         .then(function(){
+            console.log('WROTE IN DB ' + youtube_obj.id);
             cb();
         })
         .catch(function(err) {
-            Promise.reject(err);
+            if (err instanceof EarlyExitError) {
+                console.log(err.message);
+                cb();
+            }
+            cb(err);
+            //Promise.reject(err);
         });
     };
 
 const queue = jobs(db, worker, options);
 
+
+queue.on('error', function(err) {
+    //debugger;
+});
 
 exports.queue = queue;
