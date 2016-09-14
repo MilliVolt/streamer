@@ -13,6 +13,7 @@ const pg = require('knex')({
 const fs = require('fs');
 Promise.promisifyAll(fs);
 const util = require('util');
+const EarlyExitError = require('./error').EarlyExitError;
 
 const options = {
   maxConcurrency: 3,
@@ -76,14 +77,6 @@ const process_youtube = (youtube_obj)=> {
         });
     });
 };
-
-class EarlyExitError extends Error {
-    constructor(message) {
-        super(message);
-        this.message = message;
-        this.name = 'EarlyExit';
-    }
-}
 
 const worker = function(youtube_obj, cb) {
    // do download and analysis here 
