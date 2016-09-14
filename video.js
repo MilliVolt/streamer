@@ -109,7 +109,7 @@ const worker = function(youtube_obj, cb) {
         .then(get_audio_score)
         .then(write_to_db)
         .then(function(){
-            console.log('WROTE IN DB ' + youtube_obj.url_id);
+            console.log('WROTE IN DB ' + youtube_obj.id);
             cb();
         })
         .catch(function(err) {
