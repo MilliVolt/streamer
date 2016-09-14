@@ -1,8 +1,8 @@
-class EarlyExitError extends Error {
+class ExistError extends Error {
     constructor(message) {
         super(message);
         this.message = message;
-        this.name = 'EarlyExit';
+        this.name = 'ExistError';
     }
 }
 
@@ -14,6 +14,14 @@ class OverDurationError extends Error {
     }
 }
 
-exports.EarlyExitError = EarlyExitError;
+class DatabaseError extends Error {
+    constructor(message) {
+        super(message);
+        this.message = message;
+        this.name = 'DatabaseError';
+    }
+}
+exports.ExistError = ExistError;
 exports.OverDurationError = OverDurationError;
+exports.DatabaseError = DatabaseError;
 

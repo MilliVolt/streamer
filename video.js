@@ -13,10 +13,11 @@ const pg = require('knex')({
 const fs = require('fs');
 Promise.promisifyAll(fs);
 const util = require('util');
-const EarlyExitError = require('./error').EarlyExitError;
+const ExistError = require('./error').ExistError;
+const DatabaseError = require('./error').DatabaseError;
 
 const options = {
-  maxConcurrency: 3,
+  maxConcurrency: 5,
   maxRetries:     2,
   backoff: {
     randomisationFactor: 0,
@@ -29,22 +30,12 @@ const read_from_db = function(youtube_obj) {
     return pg('tft.video').where({'url_id': youtube_obj.id});
 };
 const write_to_db = function(youtube_obj) {
-    return pg('tft.video').insert(youtube_obj);
+    return pg('tft.video').insert(youtube_obj)
+                          .catch((e) => {
+                              throw new DatabaseError(e.message);
+                          });
 };
 
-const get_video_score = (youtube_obj)=> {
-    const path = util.format('buf/video_%s.tmp.simp', youtube_obj.url_id);
-    return new Promise((resolve, reject) => {
-        return fs.readFileAsync(path).then((res) =>{
-            var cleaned = res
-                    .toString()
-                    .split('\n')
-                    .slice(0, -1);
-            youtube_obj.video_shot_times = cleaned;
-            resolve(youtube_obj);
-        });
-    });
-};
 
 const get_audio_score = (youtube_obj)=> {
     const path = util.format('buf/audio_%s.tmp', youtube_obj.url_id);
@@ -54,7 +45,7 @@ const get_audio_score = (youtube_obj)=> {
                     .toString()
                     .split('\n')
                     .slice(0, -1);
-            youtube_obj.audio_beat_times = cleaned;
+            youtube_obj.audio_beat_times = cleaned || [];
             resolve(youtube_obj);
         });
     });
@@ -86,12 +77,11 @@ const worker = function(youtube_obj, cb) {
             if (exist.length !== 0) {
                 const message = util.format('%s exists in the db..skip', 
                                              youtube_obj.id);
-                throw new EarlyExitError(message);
+                throw new ExistError(message);
             } else {
                 return process_youtube(youtube_obj);
             }
         })
-        .then(get_video_score)
         .then(get_audio_score)
         .then(write_to_db)
         .then(function(){
@@ -99,11 +89,17 @@ const worker = function(youtube_obj, cb) {
             cb();
         })
         .catch(function(err) {
-            if (err instanceof EarlyExitError) {
+            if (err instanceof ExistError) {
+                console.log('ExistError');
                 console.log(err.message);
                 cb();
+            } else if (err instanceof DatabaseError) {
+                console.log('DatabaseError');
+                console.log(err.message);
+                cb();
+            } else {
+                cb(err);
             }
-            cb(err);
             //Promise.reject(err);
         });
     };
@@ -112,7 +108,6 @@ const queue = jobs(db, worker, options);
 
 
 queue.on('error', function(err) {
-    //debugger;
 });
 
 exports.queue = queue;

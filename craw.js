@@ -65,7 +65,7 @@ const parse_data = function(chunk,cb) {
         } else { 
             console.log('err');
             console.log(e.message);
-            cb(e);
+            cb();
         }
     }
 };
@@ -84,7 +84,7 @@ var pipeline = (tag, lim, cb) => {
                 console.log(err.message);
                 cb();
             }
-            cb(err);
+            cb();
         })
         .on('close', function() {
             console.log('stream on %s ended', tag);
