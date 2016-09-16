@@ -7,23 +7,16 @@ const JSONStream = require('JSONStream');
 
 const kue = require('kue');
 const queue = kue.createQueue();
-
-const video_queue = require('./video').queue;
+kue.app.listen('3000');
 
 const OverDurationError = require('./error').OverDurationError;
 
-const worker = function(search_item, cb) {
-    //console.log("job started crawling term: %s", search_item);
-    pipeline(search_item, 10, function(err) {
-        console.log(cb);
-        if (err) cb(err);
-        console.log('job on %s is drained', search_item);
+queue.process('crawl', settings.crawl_concur, function(job, cb) {
+    pipeline(job.search_item, 10, function(err) {
+        if (err) return cb(err);
         cb();
     });
-};
-
-const queue = jobs(db, worker, options);
-
+});
 
 const gen_list = (query, limit) => {
     const search = cp.spawn("youtube-dl",
@@ -31,6 +24,7 @@ const gen_list = (query, limit) => {
                              "-j"]);
     return search.stdout;
 };
+
 
 const parse_data = function(chunk,cb) {
     try {
@@ -43,9 +37,15 @@ const parse_data = function(chunk,cb) {
         }
         console.log('parsing %s', info.id);
         info.tags.map(tag => {
-            queue.create('crawl', tag); 
+            queue.create('crawl', {
+                title: util.format('querying %s', tag),
+                search_term: tag
+            }).save(); 
         });
-        queue.create('video', res_json);
+        queue.create('video', {
+            title: util.format('processing youtube id %s', info.id),
+            res_json: info
+        }).save();
     } catch(e) {
         if (e instanceof OverDurationError) {
             console.log(e.message);
@@ -82,6 +82,7 @@ var pipeline = (tag, lim, cb) => {
 };
 
 //queue.push('fixed gear bike');
+
 
 queue.on('retry', function(d) {
     //console.log('i am retrying! ', ...arguments);
