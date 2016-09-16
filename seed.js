@@ -1,2 +1,2 @@
-var queue = require('./craw').queue;
+var queue = require('./crawl').queue;
 queue.push(process.argv[2]);

@@ -8,19 +8,6 @@ const JSONStream = require('JSONStream');
 const kue = require('kue');
 const queue = kue.createQueue();
 
-const db = level('jobs/craw');
-
-
-const options = {
-  maxConcurrency: 3,
-  maxRetries:     2,
-  backoff: {
-    randomisationFactor: 0,
-    initialDelay: 10,
-    maxDelay: 300
-  }
-};
-
 const video_queue = require('./video').queue;
 
 const OverDurationError = require('./error').OverDurationError;
