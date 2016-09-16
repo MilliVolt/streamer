@@ -7,10 +7,6 @@ tmp_file=$video_file.tmp
 tmp_file2=$tmp_file.simp
 tmp_audio=$audio_file.tmp
 
-echo $video_file
-echo $tmp_file
-echo $tmp_file2
-
 #torsocks -i wget -O $video_file $video_url
 youtube-dl -f "worstvideo" $id -o "$video_file"
 ffprobe -show_frames -of compact=p=0 -f lavfi "movie=$video_file,select=gt(scene\,.35)" > $tmp_file

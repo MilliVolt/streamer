@@ -23,6 +23,20 @@ const options = {
 
 const video_queue = require('./video').queue;
 
+const OverDurationError = require('./error').OverDurationError;
+
+const worker = function(search_item, cb) {
+    //console.log("job started crawling term: %s", search_item);
+    pipeline(search_item, 10, function(err) {
+        console.log(cb);
+        if (err) cb(err);
+        console.log('job on %s is drained', search_item);
+        cb();
+    });
+};
+
+const queue = jobs(db, worker, options);
+
 
 const gen_list = (query, limit) => {
     const search = cp.spawn("youtube-dl",
@@ -34,15 +48,26 @@ const gen_list = (query, limit) => {
 const parse_data = function(chunk,cb) {
     try {
         let info = JSON.parse(chunk.toString());
+        if (info.duration > 900) { 
+            // over 15 minute video need not be considered
+            throw new OverDurationError(
+                util.format('%s exceeds 15 minutes limit at %s .. skip',
+                            info.id, info.duration/60));
+        }
         console.log('parsing %s', info.id);
         info.tags.map(tag => {
             queue.create('crawl', tag); 
         });
         queue.create('video', res_json);
     } catch(e) {
-        console.log('err');
-        console.log(e);
-        cb(e);
+        if (e instanceof OverDurationError) {
+            console.log(e.message);
+            cb();
+        } else { 
+            console.log('err');
+            console.log(e.message);
+            cb();
+        }
     }
 };
 
@@ -60,7 +85,7 @@ var pipeline = (tag, lim, cb) => {
                 console.log(err.message);
                 cb();
             }
-            cb(err);
+            cb();
         })
         .on('close', function() {
             console.log('stream on %s ended', tag);
