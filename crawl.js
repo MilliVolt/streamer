@@ -3,11 +3,7 @@ const through = require('through2');
 const util = require('util');
 const settings = require('./settings');
 const fs = require('fs');
-const JSONStream = require('JSONStream');
-
-const kue = require('kue');
-const queue = kue.createQueue();
-kue.app.listen('3000');
+const queue = require('./queue');
 
 const OverDurationError = require('./error').OverDurationError;
 
@@ -80,17 +76,3 @@ var pipeline = (tag, lim, cb) => {
         })
         ;
 };
-
-//queue.push('fixed gear bike');
-
-
-queue.on('retry', function(d) {
-    //console.log('i am retrying! ', ...arguments);
-});
-
-queue.on('error', function(err) {
-    console.log(err);
-});
-
-exports.pipeline = pipeline;
-exports.queue = queue;

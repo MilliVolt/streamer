@@ -104,10 +104,6 @@ const worker = function(youtube_obj, cb) {
         });
     };
 
-const queue = jobs(db, worker, options);
 
 
-queue.on('error', function(err) {
-});
 
-exports.queue = queue;
