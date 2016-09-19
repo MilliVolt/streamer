@@ -1,1 +1,7 @@
-{"BUFFER_DIR": "media"}
+{
+    "BUFFER_DIR": "buf",
+    "constring": "postgres://postgres:password@localhost:tft",
+    "crawl_concur": 1,
+    "video_concur": 1
+}
+
