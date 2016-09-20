@@ -7,13 +7,6 @@ const queue = require('./queue');
 
 const OverDurationError = require('./error').OverDurationError;
 
-queue.process('crawl', settings.crawl_concur, function(job, cb) {
-    pipeline(job.search_item, 10, function(err) {
-        if (err) return cb(err);
-        cb();
-    });
-});
-
 const gen_list = (query, limit) => {
     const search = cp.spawn("youtube-dl",
                             ["ytsearch" + limit + ":" + query,
@@ -24,14 +17,14 @@ const gen_list = (query, limit) => {
 
 const parse_data = function(chunk,cb) {
     try {
-        let info = JSON.parse(chunk.toString());
+        let info = JSON.parse(chunk);
         if (info.duration > 900) { 
             // over 15 minute video need not be considered
             throw new OverDurationError(
                 util.format('%s exceeds 15 minutes limit at %s .. skip',
                             info.id, info.duration/60));
         }
-        console.log('parsing %s', info.id);
+        console.log('parsing %s: %s', info.id, info.title);
         info.tags.map(tag => {
             queue.create('crawl', {
                 title: util.format('querying %s', tag),
@@ -43,19 +36,21 @@ const parse_data = function(chunk,cb) {
             res_json: info
         }).save();
     } catch(e) {
-        if (e instanceof OverDurationError) {
+        if (e instanceof OverDurationError ||
+            e instanceof SyntaxError ||
+            e instanceof TypeError) {
             console.log(e.message);
-            cb();
+            return;
         } else { 
             console.log('err');
             console.log(e.message);
-            cb();
+            return;
         }
     }
 };
 
-var pipeline = (tag, lim, cb) => {
-    //console.log('now search for the %s best list of %s', lim, tag);
+const pipeline = (tag, lim, cb) => {
+    console.log('now search for the %s best list of %s', lim, tag);
     gen_list(tag, lim)
         .on('data', function(data) {
             parse_data(data, cb);
@@ -72,7 +67,13 @@ var pipeline = (tag, lim, cb) => {
         })
         .on('close', function() {
             console.log('stream on %s ended', tag);
-            cb(null);
-        })
-        ;
+            cb();
+        });
 };
+
+queue.process('crawl', settings.crawl_concur, function(job, cb) {
+    pipeline(job.data.search_term, 10, function(err) {
+        if (err) return cb(err);
+        cb();
+    });
+});
