@@ -94,7 +94,7 @@ const pipeline = function(youtube_obj, cb) {
             }
             //Promise.reject(err);
         });
-    };
+};
 
 queue.process('video', settings.video_concur, function (job, cb) {
     pipeline(job.data.res_json, function(err) {
