@@ -1,10 +1,8 @@
 const level = require('level');
-const jobs = require('level-jobs');
 const cp = require('child_process');
 const through = require('through2');
 const settings = require('./settings');
 const Promise = require('bluebird');
-const db = level('jobs/video');
 const constring = settings.constring;
 const pg = require('knex')({
     client: 'pg',
@@ -18,13 +16,15 @@ const ExistError = require('./error').ExistError;
 const DatabaseError = require('./error').DatabaseError;
 
 const read_from_db = function(youtube_obj) {
-    return pg('tft.video').where({'url_id': youtube_obj.id});
+    return pg('tft.video').where({'url_id': youtube_obj.id})
+                          .catch((e) => {
+                              throw new DatabaseError(e.message);
+                          });
 };
 const write_to_db = function(youtube_obj) {
     return pg('tft.video').insert(youtube_obj)
                           .catch((e) => {
-                              throw new DatabaseError(e.message + 
-                                  e.youtube_obj.id);
+                              throw new DatabaseError(e.message);
                           });
 };
 
@@ -43,20 +43,31 @@ const get_audio_score = (youtube_obj)=> {
     });
 };
 
+const res_yt = (youtube_obj) => {
+    let res = {};
+    res.url_id = youtube_obj.id;
+    res.duration = youtube_obj.duration;
+    res.tags = youtube_obj.tags || []; // in case if it's undefined
+    res.video_metadata = JSON.stringify(youtube_obj); //json(b)
+    return res;
+};
+
 const process_youtube = (youtube_obj)=> {
     return new Promise((resolve, reject) => {
-        var extraction = cp.spawn('./process_youtube.bash', 
-                                  [youtube_obj.id]);
-        extraction.stdout.resume();
-        extraction.stderr.resume();
-        extraction.on('error', (err) => reject(err));
-        extraction.on('exit', function(exit_code) {
-            let res = {};
-            res.url_id = youtube_obj.id;
-            res.duration = youtube_obj.duration;
-            res.tags = youtube_obj.tags || []; // in case if it's undefined
-            res.video_metadata = JSON.stringify(youtube_obj); //json(b)
-            resolve(res);
+        fs.stat(util.format('buf/audio_%s.tmp', youtube_obj.id), (err, stat)=> {
+            if (err && err.code === 'ENOENT') { // Error NO ENTry
+                const extraction = cp.spawn('./process_youtube.bash', [youtube_obj.id]);
+                extraction.stdout.resume();
+                //extraction.stderr.resume();
+                extraction.on('error', (err) => reject(err));
+                extraction.on('exit', function(exit_code) {
+                    resolve(res_yt(youtube_obj));
+                });
+                extraction.stderr.on('data', (err) => reject(err.toString()));
+            } else {
+                console.log(util.format('audio file %s exists in fs, skipping processing'));
+                return resolve(res_yt(youtube_obj));
+            }
         });
     });
 };
@@ -90,9 +101,10 @@ const pipeline = function(youtube_obj, cb) {
                 console.log(err.message);
                 cb();
             } else {
+                console.log('unhandled err:');
+                console.log(err);
                 cb(err);
             }
-            //Promise.reject(err);
         });
 };
 

@@ -1,6 +1,6 @@
 const kue = require('kue');
 const queue = kue.createQueue();
-kue.app.listen('3000');
+//kue.app.listen('3000');
 //queue.push('fixed gear bike');
 
 
@@ -9,7 +9,7 @@ queue.on('retry', function(d) {
 });
 
 queue.on('error', function(err) {
-    console.log(err);
+    console.log('oops.. ' + err);
 });
 
 module.exports = queue;
