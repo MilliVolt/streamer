@@ -3,39 +3,9 @@ const through = require('through2');
 const util = require('util');
 const settings = require('./settings');
 const fs = require('fs');
-const JSONStream = require('JSONStream');
-
-const level = require('level');
-const jobs = require('level-jobs');
-
-const db = level('jobs/craw');
-
-const options = {
-  maxConcurrency: 3,
-  maxRetries:     2,
-  backoff: {
-    randomisationFactor: 0,
-    initialDelay: 10,
-    maxDelay: 300
-  }
-};
-
-const video_queue = require('./video').queue;
+const queue = require('./queue');
 
 const OverDurationError = require('./error').OverDurationError;
-
-const worker = function(search_item, cb) {
-    //console.log("job started crawling term: %s", search_item);
-    pipeline(search_item, 10, function(err) {
-        console.log(cb);
-        if (err) cb(err);
-        console.log('job on %s is drained', search_item);
-        cb();
-    });
-};
-
-const queue = jobs(db, worker, options);
-
 
 const gen_list = (query, limit) => {
     const search = cp.spawn("youtube-dl",
@@ -44,42 +14,51 @@ const gen_list = (query, limit) => {
     return search.stdout;
 };
 
+
 const parse_data = function(chunk,cb) {
     try {
-        let info = JSON.parse(chunk.toString());
+        let info = JSON.parse(chunk);
         if (info.duration > 900) { 
             // over 15 minute video need not be considered
             throw new OverDurationError(
                 util.format('%s exceeds 15 minutes limit at %s .. skip',
                             info.id, info.duration/60));
         }
-        console.log('parsing %s', info.id);
+        console.log('parsing %s: %s', info.id, info.title);
         info.tags.map(tag => {
-            queue.push(tag);
+            queue.create('crawl', {
+                title: util.format('querying %s', tag),
+                search_term: tag
+            }).save(); 
         });
-        video_queue.push(info);
+        queue.create('video', {
+            title: util.format('processing youtube id %s', info.id),
+            res_json: info
+        }).save();
     } catch(e) {
-        if (e instanceof OverDurationError) {
+        if (e instanceof OverDurationError ||
+            e instanceof SyntaxError ||
+            e instanceof TypeError) {
             console.log(e.message);
-            cb();
+            return;
         } else { 
             console.log('err');
             console.log(e.message);
-            cb();
+            return;
         }
     }
 };
 
-var pipeline = (tag, lim, cb) => {
-    //console.log('now search for the %s best list of %s', lim, tag);
+const pipeline = (tag, lim, cb) => {
+    console.log('now search for the %s best list of %s', lim, tag);
     gen_list(tag, lim)
         .on('data', function(data) {
             parse_data(data, cb);
         })
         .on('error', (err) => {
             //console.log('error');
-            if (err instanceof SyntaxError ||
-                err instanceof TypeError) {
+            if ((err instanceof SyntaxError) ||
+                (err instanceof TypeError)) {
                 // if it's ill defined json, don't care
                 console.log(err.message);
                 cb();
@@ -88,21 +67,13 @@ var pipeline = (tag, lim, cb) => {
         })
         .on('close', function() {
             console.log('stream on %s ended', tag);
-            cb(null);
-        })
-        ;
+            cb();
+        });
 };
 
-//queue.push('fixed gear bike');
-
-queue.on('retry', function(d) {
-
-    //console.log('i am retrying! ', ...arguments);
+queue.process('crawl', settings.crawl_concur, function(job, cb) {
+    pipeline(job.data.search_term, 10, function(err) {
+        if (err) return cb(err);
+        cb();
+    });
 });
-
-queue.on('error', function(err) {
-    console.log(err);
-});
-
-exports.pipeline = pipeline;
-exports.queue = queue;

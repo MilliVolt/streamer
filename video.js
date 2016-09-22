@@ -13,18 +13,9 @@ const pg = require('knex')({
 const fs = require('fs');
 Promise.promisifyAll(fs);
 const util = require('util');
+const queue = require('./queue');
 const ExistError = require('./error').ExistError;
 const DatabaseError = require('./error').DatabaseError;
-
-const options = {
-  maxConcurrency: 5,
-  maxRetries:     2,
-  backoff: {
-    randomisationFactor: 0,
-    initialDelay: 10,
-    maxDelay: 300
-  }
-};
 
 const read_from_db = function(youtube_obj) {
     return pg('tft.video').where({'url_id': youtube_obj.id});
@@ -32,7 +23,8 @@ const read_from_db = function(youtube_obj) {
 const write_to_db = function(youtube_obj) {
     return pg('tft.video').insert(youtube_obj)
                           .catch((e) => {
-                              throw new DatabaseError(e.message);
+                              throw new DatabaseError(e.message + 
+                                  e.youtube_obj.id);
                           });
 };
 
@@ -69,7 +61,7 @@ const process_youtube = (youtube_obj)=> {
     });
 };
 
-const worker = function(youtube_obj, cb) {
+const pipeline = function(youtube_obj, cb) {
    // do download and analysis here 
     console.log('starting processing %s' , youtube_obj.id);
     read_from_db(youtube_obj)
@@ -102,12 +94,11 @@ const worker = function(youtube_obj, cb) {
             }
             //Promise.reject(err);
         });
-    };
+};
 
-const queue = jobs(db, worker, options);
-
-
-queue.on('error', function(err) {
+queue.process('video', settings.video_concur, function (job, cb) {
+    pipeline(job.data.res_json, function(err) {
+        if (err) cb(err);
+        cb();
+    });
 });
-
-exports.queue = queue;
