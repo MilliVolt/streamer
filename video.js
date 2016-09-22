@@ -41,20 +41,31 @@ const get_audio_score = (youtube_obj)=> {
     });
 };
 
+const res_yt = (youtube_obj) => {
+    let res = {};
+    res.url_id = youtube_obj.id;
+    res.duration = youtube_obj.duration;
+    res.tags = youtube_obj.tags || []; // in case if it's undefined
+    res.video_metadata = JSON.stringify(youtube_obj); //json(b)
+    return res;
+};
+
 const process_youtube = (youtube_obj)=> {
     return new Promise((resolve, reject) => {
-        var extraction = cp.spawn('./process_youtube.bash', 
-                                  [youtube_obj.id]);
-        extraction.stdout.resume();
-        extraction.stderr.resume();
-        extraction.on('error', (err) => reject(err));
-        extraction.on('exit', function(exit_code) {
-            let res = {};
-            res.url_id = youtube_obj.id;
-            res.duration = youtube_obj.duration;
-            res.tags = youtube_obj.tags || []; // in case if it's undefined
-            res.video_metadata = JSON.stringify(youtube_obj); //json(b)
-            resolve(res);
+        fs.stat(util.format('buf/audio_%s.tmp', youtube_obj.id), (err, stat)=> {
+            if (err && err.code === 'ENOENT') { // Error NO ENTry
+                var extraction = cp.spawn('./process_youtube.bash', 
+                                          [youtube_obj.id]);
+                extraction.stdout.resume();
+                extraction.stderr.resume();
+                extraction.on('error', (err) => reject(err));
+                extraction.on('exit', function(exit_code) {
+                    resolve(res_yt(youtube_obj));
+                });
+            } else {
+                console.log(util.format('audio file %s exists in fs, skipping processing'));
+                return resolve(res_yt(youtube_obj));
+            }
         });
     });
 };
@@ -90,7 +101,6 @@ const pipeline = function(youtube_obj, cb) {
             } else {
                 cb(err);
             }
-            //Promise.reject(err);
         });
 };
 
