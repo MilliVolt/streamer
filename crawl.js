@@ -32,11 +32,11 @@ const parse_data = function(chunk,cb) {
                     queue.create('crawl', {
                         title: util.format('querying %s', tag),
                         search_term: tag
-                    }).save(); 
+                    }).attempts(2).save(); 
                     hash.crawl.put(tag, 'pending');
-                    console.log(util.format('adding %s to queue', tag));
+                    //console.log(util.format('adding %s to queue', tag));
                 } else {
-                    console.log(util.format("%s already searched", tag));
+                    //console.log(util.format("%s already searched", tag));
                 }
             });
         });
@@ -45,7 +45,7 @@ const parse_data = function(chunk,cb) {
                 queue.create('video', {
                     title: util.format('processing youtube id %s', info.id),
                     res_json: info
-                }).save();
+                }).attempts(2).save();
                 hash.video.put(info.id, 'pending');
             } else {
                 console.log(util.format("%s already searched", info.id));

@@ -16,13 +16,15 @@ const ExistError = require('./error').ExistError;
 const DatabaseError = require('./error').DatabaseError;
 
 const read_from_db = function(youtube_obj) {
-    return pg('tft.video').where({'url_id': youtube_obj.id});
+    return pg('tft.video').where({'url_id': youtube_obj.id})
+                          .catch((e) => {
+                              throw new DatabaseError(e.message);
+                          });
 };
 const write_to_db = function(youtube_obj) {
     return pg('tft.video').insert(youtube_obj)
                           .catch((e) => {
-                              throw new DatabaseError(e.message + 
-                                  e.youtube_obj.id);
+                              throw new DatabaseError(e.message);
                           });
 };
 
@@ -54,14 +56,14 @@ const process_youtube = (youtube_obj)=> {
     return new Promise((resolve, reject) => {
         fs.stat(util.format('buf/audio_%s.tmp', youtube_obj.id), (err, stat)=> {
             if (err && err.code === 'ENOENT') { // Error NO ENTry
-                var extraction = cp.spawn('./process_youtube.bash', 
-                                          [youtube_obj.id]);
+                const extraction = cp.spawn('./process_youtube.bash', [youtube_obj.id]);
                 extraction.stdout.resume();
-                extraction.stderr.resume();
+                //extraction.stderr.resume();
                 extraction.on('error', (err) => reject(err));
                 extraction.on('exit', function(exit_code) {
                     resolve(res_yt(youtube_obj));
                 });
+                extraction.stderr.on('data', (err) => reject(err.toString()));
             } else {
                 console.log(util.format('audio file %s exists in fs, skipping processing'));
                 return resolve(res_yt(youtube_obj));
@@ -99,6 +101,8 @@ const pipeline = function(youtube_obj, cb) {
                 console.log(err.message);
                 cb();
             } else {
+                console.log('unhandled err:');
+                console.log(err);
                 cb(err);
             }
         });
