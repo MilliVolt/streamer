@@ -1,10 +1,8 @@
 const level = require('level');
-const jobs = require('level-jobs');
 const cp = require('child_process');
 const through = require('through2');
 const settings = require('./settings');
 const Promise = require('bluebird');
-const db = level('jobs/video');
 const constring = settings.constring;
 const pg = require('knex')({
     client: 'pg',

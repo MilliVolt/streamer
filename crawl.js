@@ -4,6 +4,7 @@ const util = require('util');
 const settings = require('./settings');
 const fs = require('fs');
 const queue = require('./queue');
+const hash = require('./hash');
 
 const OverDurationError = require('./error').OverDurationError;
 
@@ -26,15 +27,30 @@ const parse_data = function(chunk,cb) {
         }
         console.log('parsing %s: %s', info.id, info.title);
         info.tags.map(tag => {
-            queue.create('crawl', {
-                title: util.format('querying %s', tag),
-                search_term: tag
-            }).save(); 
+            hash.crawl.get(tag, (err, status) => {
+                if (err && err.type === 'NotFoundError') {
+                    queue.create('crawl', {
+                        title: util.format('querying %s', tag),
+                        search_term: tag
+                    }).save(); 
+                    hash.crawl.put(tag, 'pending');
+                    console.log(util.format('adding %s to queue', tag));
+                } else {
+                    console.log(util.format("%s already searched", tag));
+                }
+            });
         });
-        queue.create('video', {
-            title: util.format('processing youtube id %s', info.id),
-            res_json: info
-        }).save();
+        hash.video.get(info.id, (err, status) => {
+            if (err && err.type === 'NotFoundError') {
+                queue.create('video', {
+                    title: util.format('processing youtube id %s', info.id),
+                    res_json: info
+                }).save();
+                hash.video.put(info.id, 'pending');
+            } else {
+                console.log(util.format("%s already searched", info.id));
+            }
+        });
     } catch(e) {
         if (e instanceof OverDurationError ||
             e instanceof SyntaxError ||
@@ -60,6 +76,7 @@ const pipeline = (tag, lim, cb) => {
             if ((err instanceof SyntaxError) ||
                 (err instanceof TypeError)) {
                 // if it's ill defined json, don't care
+                    //
                 console.log(err.message);
                 cb();
             }
