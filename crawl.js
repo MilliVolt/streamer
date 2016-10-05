@@ -11,52 +11,51 @@ const OverDurationError = require('./error').OverDurationError;
 const gen_list = (query, limit) => {
     const search = cp.spawn("youtube-dl",
                             ["ytsearch" + limit + ":" + query,
-                             "-j"]);
+                             "-J"]);
     return search.stdout;
 };
 
 
-const parse_data = function(chunk,cb) {
+const parse_data = function(chunk) {
     try {
-        let info = JSON.parse(chunk);
-        if (info.duration > 900) { 
-            // over 15 minute video need not be considered
-            throw new OverDurationError(
-                util.format('%s exceeds 15 minutes limit at %s .. skip',
-                            info.id, info.duration/60));
-        }
-        console.log('parsing %s: %s', info.id, info.title);
-        info.tags.map(tag => {
-            hash.crawl.get(tag, (err, status) => {
-                if (err && err.type === 'NotFoundError') {
-                    queue.create('crawl', {
-                        title: util.format('querying %s', tag),
-                        search_term: tag
-                    }).attempts(2).save(); 
-                    hash.crawl.put(tag, 'pending');
-                    //console.log(util.format('adding %s to queue', tag));
-                } else {
-                    //console.log(util.format("%s already searched", tag));
-                }
+        let big_list = JSON.parse(chunk);
+        big_list.entries
+            .filter((info) => {
+                return info.duration < 900;
+            })
+            .map((info) => {
+                //console.log('parsing %s: %s', info.id, info.title);
+                info.tags.map(tag => {
+                    hash.crawl.get(tag, (err, status) => {
+                        if (err && err.type === 'NotFoundError') {
+                            queue.create('crawl', {
+                                title: util.format('querying %s', tag),
+                                search_term: tag
+                            }).attempts(2).save(); 
+                            hash.crawl.put(tag, 'pending');
+                            //console.log(util.format('adding %s to queue', tag));
+                        } else {
+                            console.log(util.format("%s already searched", tag));
+                        }
+                    });
+                });
+                hash.video.get(info.id, (err, status) => {
+                    if (err && err.type === 'NotFoundError') {
+                        queue.create('video', {
+                            title: util.format('processing youtube id %s', info.id),
+                            res_json: info
+                        }).attempts(2).save();
+                        hash.video.put(info.id, 'pending');
+                    } else {
+                        console.log(util.format("%s already searched", info.id));
+                    }
+                });
             });
-        });
-        hash.video.get(info.id, (err, status) => {
-            if (err && err.type === 'NotFoundError') {
-                queue.create('video', {
-                    title: util.format('processing youtube id %s', info.id),
-                    res_json: info
-                }).attempts(2).save();
-                hash.video.put(info.id, 'pending');
-            } else {
-                console.log(util.format("%s already searched", info.id));
-            }
-        });
+
     } catch(e) {
-        if (e instanceof OverDurationError ||
-            e instanceof SyntaxError ||
+        if (e instanceof SyntaxError ||
             e instanceof TypeError) {
-            console.log(e.message);
-            return;
+            console.log('incomplete data, discard...');
         } else { 
             console.log('err');
             console.log(e.message);
@@ -67,9 +66,10 @@ const parse_data = function(chunk,cb) {
 
 const pipeline = (tag, lim, cb) => {
     console.log('now search for the %s best list of %s', lim, tag);
+    let chunks = [];
     gen_list(tag, lim)
         .on('data', function(data) {
-            parse_data(data, cb);
+            chunks.push(data);
         })
         .on('error', (err) => {
             //console.log('error');
@@ -83,7 +83,8 @@ const pipeline = (tag, lim, cb) => {
             cb();
         })
         .on('close', function() {
-            console.log('stream on %s ended', tag);
+            let body = Buffer.concat(chunks);
+            parse_data(body);
             cb();
         });
 };
