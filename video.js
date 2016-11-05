@@ -1,6 +1,5 @@
 const level = require('level');
 const cp = require('child_process');
-const through = require('through2');
 const settings = require('./settings');
 const Promise = require('bluebird');
 const constring = settings.constring;
@@ -21,11 +20,59 @@ const read_from_db = function(youtube_obj) {
                               throw new DatabaseError(e.message);
                           });
 };
-const write_to_db = function(youtube_obj) {
-    return pg('tft.video').insert(youtube_obj)
-                          .catch((e) => {
-                              throw new DatabaseError(e.message);
-                          });
+
+const write_to_video_tbl = function(trx, youtube_obj) {
+    return pg('tft.video')
+            .transacting(trx)
+            .returning('tags')
+            .insert(youtube_obj);
+};
+
+const write_to_tag_tbl = function(trx, youtube_obj) {
+        return function(res) {
+            if (youtube_obj.tags.length > 0) {
+                let ins = youtube_obj.tags.map((x) => {
+                    return {tag: x};
+                });
+                let insert_query =pg('tft.tags')
+                        .transacting(trx)
+                        .insert(ins)
+                        .toString();
+                        //.on_conflict_do_nothing
+                let on_conflict = 'ON CONFLICT DO NOTHING';
+                let query = util.format(insert_query, on_conflict);
+                return pg.raw(query).transacting(trx);
+            }
+            return;
+
+        };
+};
+
+const write_to_videotag_tbl = function(trx, youtube_obj) {
+    return function(res) {
+        return pg
+            .transacting(trx)
+            .select('tags.id as tag_id', 'video.id as video_id')
+            .from(pg.raw('tft.tags as tags, tft.video as video'))
+            .where({'video.url_id': youtube_obj.url_id})
+            .whereIn('tags.tag', youtube_obj.tags)
+            .then((ins) => pg('tft.videotags').transacting(trx).insert(ins));
+    };
+};
+
+const transact = function(youtube_obj) {
+    return pg.transaction(function(trx) {
+        write_to_video_tbl(trx, youtube_obj)
+            .then(write_to_tag_tbl(trx, youtube_obj))
+            .then(write_to_videotag_tbl(trx, youtube_obj))
+            .then(trx.commit)
+            .then(Promise.resolve)
+            .catch((err) => {
+                console.log(err.message);
+                trx.rollback(err);
+                Promise.reject(err);
+            });
+    });
 };
 
 
@@ -86,7 +133,7 @@ const pipeline = function(youtube_obj, cb) {
             }
         })
         .then(get_audio_score)
-        .then(write_to_db)
+        .then(transact)
         .then(function(){
             console.log('WROTE IN DB ' + youtube_obj.id);
             cb();
