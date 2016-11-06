@@ -2,6 +2,7 @@ const level = require('level');
 const cp = require('child_process');
 const settings = require('./settings');
 const Promise = require('bluebird');
+const _ = require('lodash');
 const constring = settings.constring;
 const pg = require('knex')({
     client: 'pg',
@@ -22,19 +23,20 @@ const read_from_db = function(youtube_obj) {
 };
 
 const write_to_video_tbl = function(trx, youtube_obj) {
+    let obj = _.clone(youtube_obj);
+    delete obj.tags;
     return pg('tft.video')
             .transacting(trx)
-            .returning('tags')
-            .insert(youtube_obj);
+            .insert(obj);
 };
 
 const write_to_tag_tbl = function(trx, youtube_obj) {
         return function(res) {
             if (youtube_obj.tags.length > 0) {
                 let ins = youtube_obj.tags.map((x) => {
-                    return {tag: x};
+                    return {tag_name: x};
                 });
-                let insert_query =pg('tft.tags')
+                let insert_query =pg('tft.tag')
                         .transacting(trx)
                         .insert(ins)
                         .toString();
@@ -52,11 +54,12 @@ const write_to_videotag_tbl = function(trx, youtube_obj) {
     return function(res) {
         return pg
             .transacting(trx)
-            .select('tags.id as tag_id', 'video.id as video_id')
-            .from(pg.raw('tft.tags as tags, tft.video as video'))
+            .select('tag.tag_id as videotag_tag_id', 
+                'video.video_id as videotag_video_id')
+            .from(pg.raw('tft.tag as tag, tft.video as video'))
             .where({'video.url_id': youtube_obj.url_id})
-            .whereIn('tags.tag', youtube_obj.tags)
-            .then((ins) => pg('tft.videotags').transacting(trx).insert(ins));
+            .whereIn('tag.tag_name', youtube_obj.tags)
+            .then((ins) => pg('tft.videotag').transacting(trx).insert(ins));
     };
 };
 
@@ -70,7 +73,7 @@ const transact = function(youtube_obj) {
             .catch((err) => {
                 console.log(err.message);
                 trx.rollback(err);
-                Promise.reject(err);
+                Promise.reject(new DatabaseError(err.message));
             });
     });
 };
@@ -94,7 +97,8 @@ const res_yt = (youtube_obj) => {
     let res = {};
     res.url_id = youtube_obj.id;
     res.duration = youtube_obj.duration;
-    res.tags = youtube_obj.tags || []; // in case if it's undefined
+    res.title = youtube_obj.title;
+    res.tags = youtube_obj.tags;
     res.video_metadata = JSON.stringify(youtube_obj); //json(b)
     return res;
 };
