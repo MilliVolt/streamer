@@ -67,9 +67,11 @@ const parse_data = function(chunk) {
 const pipeline = (tag, lim, cb) => {
     console.log('now search for the %s best list of %s', lim, tag);
     let chunks = [];
+    let len = 0;
     gen_list(tag, lim)
         .on('data', function(data) {
             chunks.push(data);
+            len = len + data.length;
         })
         .on('error', (err) => {
             //console.log('error');
@@ -83,7 +85,7 @@ const pipeline = (tag, lim, cb) => {
             cb();
         })
         .on('close', function() {
-            let body = Buffer.concat(chunks);
+            let body = Buffer.concat(chunks, len);
             parse_data(body);
             cb();
         });
