@@ -16,7 +16,7 @@ const gen_list = (query, limit) => {
 };
 
 
-const parse_data = function(chunk) {
+const parse_data = function(original_tag, chunk) {
     try {
         let big_list = JSON.parse(chunk);
         big_list.entries
@@ -26,13 +26,15 @@ const parse_data = function(chunk) {
             .map((info) => {
                 //console.log('parsing %s: %s', info.id, info.title);
                 info.tags.map(tag => {
-                    hash.crawl.get(tag, (err, status) => {
+                    let new_tag = [original_tag, tag].join(" ");
+                    hash.crawl.get(new_tag, (err, status) => {
                         if (err && err.type === 'NotFoundError') {
                             queue.create('crawl', {
-                                title: util.format('querying %s', tag),
-                                search_term: tag
+                                title: util.format('querying %s', new_tag),
+                                search_term:  new_tag// convergence tagging
+                                // this way 
                             }).attempts(2).save(); 
-                            hash.crawl.put(tag, 'pending');
+                            hash.crawl.put(new_tag, 'pending');
                             //console.log(util.format('adding %s to queue', tag));
                         } else {
                             console.log(util.format("%s already searched", tag));
@@ -86,7 +88,7 @@ const pipeline = (tag, lim, cb) => {
         })
         .on('close', function() {
             let body = Buffer.concat(chunks, len);
-            parse_data(body);
+            parse_data(tag, body);
             cb();
         });
 };

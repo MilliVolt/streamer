@@ -5,11 +5,11 @@ const queue = kue.createQueue();
 
 
 queue.on('retry', function(d) {
-    //console.log('i am retrying! ', ...arguments);
+    console.log('OOPS QUEUE RETRY ', ...arguments);
 });
 
 queue.on('error', function(err) {
-    console.log('oops.. ' + err);
+    console.log('OOPS QUEUE ERROR.. ' + err);
 });
 
 module.exports = queue;
